@@ -72,7 +72,7 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 
 ## App Store Regulations & Permits declarations
 
-- The public OpenAPI snapshot has no medical-device, personal-service, trader, or DSA declaration endpoints (`TerritoryAvailability.contentStatuses` exposes only read-only trader status consequence codes; see EU Digital Services Act trader status below).
+- The public OpenAPI snapshot has no medical-device, personal-service, trader, or DSA declaration endpoints (`TerritoryAvailability.contentStatuses` exposes only read-only trader status consequence codes; see EU Digital Services Act trader status and Territory content statuses below).
 - Declarations use the web-session `ppm/complianceform/v1` service with UI headers (`X-Csrf-Itc: itc`, `Origin`, and `/apps/{id}/distribution/info` `Referer`):
   - `asc web apps declarations list`: `GET /ppm/complianceform/v1/accounts/{accountId}/requirements?contentId={appId}`. Prefers `requirementData` matching `contentId`, falling back to empty `contentId`.
   - `asc web apps medical-device view`: `GET /ppm/complianceform/v1/accounts/{accountId}/requirements/{requirementId}/forms?contentId={appId}`, reading `medicalDeviceData.declaration` (`no`, `yes`, or absent) alongside `$[*]`-rooted `constraints`.
@@ -114,6 +114,19 @@ Finance reports use Apple fiscal months (`YYYY-MM`), not calendar months.
 - `asc web api-keys view --key-id` reads `GET /iris/v1/apiKeys/{id}?include=provider` (team keys only). Creation dates are absent from the payload and private key material is never printed.
 - `asc web api-keys create-individual --user-id USER_UUID --output-dir DIR --confirm` checks `GET /iris/v1/apiAccesses` (`APPROVED`) plus fail-closed `GET /iris/v1/users/{userUUID}` and session-email preflight, stages a local `0600` PKCS#8 P-256 private key under `--output-dir`, sends `POST /iris/v2/apiKeys` (`{data:{type:"apiKeys"}}`), resolves the single new active key from the actor-filtered v2 list (`filter[createdByActor]=USER:{actorID}`), atomically renames the key to `ApiKey_<KEY_ID>.p8` without replacing existing files, registers the SPKI public key via `PATCH /iris/v2/apiKeys/{KEY_ID}`, and verifies active readback. Uncertain steps retain the local artifact and never retry automatically. Source-backed; live individual key creation remains unverified.
 - `asc web api-keys revoke --key-id KEY_ID --type team|individual --confirm` sends `PATCH /iris/{v1|v2}/apiKeys/{id}` with `{"data":{"id":"<id>","type":"apiKeys","attributes":{"isActive":false}}}` after pre-listing the requested family, and verifies inactive post-state without retrying 5xx/transport failures. Team create/revoke is live-verified; individual revoke remains unverified.
+
+## Territory content statuses (`TerritoryAvailability.contentStatuses`)
+
+- `asc validate` reads the statuses from the territory availabilities it already fetches (`GET /v2/appAvailabilities/{id}/territoryAvailabilities`, which requests `contentStatuses`) and warns, one finding per cause, about the ones that keep the app off sale. The API reference lists the values without meanings. The meanings come from the "App Store availability statuses" table in App Store Connect Help (App and submission statuses), which names UI labels rather than enum values; matching a label to a value is by name except for `ICP_NUMBER_*` and `TRADER_STATUS_*`, which API 3.6 and 3.8 release notes tie to their help pages.
+  - `MISSING_RATING` ("Missing App Rating"): `availability.territories.missing_rating`.
+  - `BRAZIL_REQUIRED_TAX_ID` ("Missing Tax Form", Brazil): `availability.territories.brazil_tax_id`.
+  - `MISSING_GRN` ("Missing Game registration number", China mainland National Press and Publication Administration approval) and `UNVERIFIED_GRN` (no help text; grouped by name): `availability.territories.china_game_approval`.
+  - `ICP_NUMBER_MISSING` and `ICP_NUMBER_INVALID` ("ICP Filing Number Missing/Invalid", China mainland): `availability.territories.china_icp`.
+  - `CANNOT_SELL_*_WITHOUT_GRAC`: `availability.territories.korea_rating`. Help requires a GRAC Rating Classification Number for some apps in the Republic of Korea; the public API sets it with `AgeRatingDeclaration.gracRatingClassificationNumber` (`asc age-rating edit --grac-rating-classification-number`).
+  - `TRADER_STATUS_*`: `availability.territories.trader_status` (see EU Digital Services Act trader status).
+  - Every other `CANNOT_SELL_*` value, and `BRAZIL_GAMBLING_NOT_VERIFIED`, has no help text; `availability.territories.cannot_sell` reports it as a sale restriction and points at Pricing and Availability, where App Store Connect shows the reason when you hold the pointer over the status.
+- Plain `CANNOT_SELL` ("Cannot Sell App") is not reported. Live, every territory of a submitted, never-released app reports `CANNOT_SELL` together with `AVAILABLE_FOR_SALE_UNRELEASED_APP` (observed 2026-11-23). Available, pre-order, and `PROCESSING_TO_*` statuses are informational. Unrecognized values that do not start with `CANNOT_SELL_` are ignored.
+- All findings are warnings. None of the off-sale statuses has been observed live.
 
 ## Web app availability (iris)
 
