@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -95,14 +96,22 @@ func availabilityChecks(appID string, availabilityID string, availableTerritorie
 }
 
 // territoryContentStatusRule groups territory content statuses that Apple
-// reports for one cause into a single finding.
+// reports for one cause into a single finding. A status belongs to the first
+// rule that lists it or, failing that, to the first rule whose prefix it has.
 type territoryContentStatusRule struct {
 	id          string
 	statuses    []string
+	prefix      string
 	subject     string
 	remediation string
 }
 
+// territoryContentStatusRules cover the statuses that keep the app off sale in
+// a territory. Plain CANNOT_SELL is not one of them: an app that was never
+// released reports it in every territory next to
+// AVAILABLE_FOR_SALE_UNRELEASED_APP, and App Store Connect gives the reason
+// in a separate status. Available, pre-order, and processing statuses are
+// informational.
 var territoryContentStatusRules = []territoryContentStatusRule{
 	{
 		id: "availability.territories.trader_status",
@@ -114,27 +123,74 @@ var territoryContentStatusRules = []territoryContentStatusRule{
 		subject:     "an EU Digital Services Act trader status problem",
 		remediation: "Have the Account Holder or an Admin provide or fix the trader status in App Store Connect > Business > Digital Services Act, then check it with `asc web business trader-status`",
 	},
+	{
+		id:          "availability.territories.missing_rating",
+		statuses:    []string{"MISSING_RATING"},
+		subject:     "a missing age rating",
+		remediation: "Set the age rating: review it with `asc age-rating view --app APP_ID` and answer the questionnaire with `asc age-rating edit`",
+	},
+	{
+		id:          "availability.territories.brazil_tax_id",
+		statuses:    []string{"BRAZIL_REQUIRED_TAX_ID"},
+		subject:     "missing Brazilian tax information",
+		remediation: "Have the Account Holder or an Admin submit the Brazilian tax information in App Store Connect > Business > Tax",
+	},
+	{
+		id:          "availability.territories.china_game_approval",
+		statuses:    []string{"MISSING_GRN", "UNVERIFIED_GRN"},
+		subject:     "a missing or unverified China mainland game approval number",
+		remediation: "Provide the game approval number and supporting documents from China's National Press and Publication Administration under App Information in App Store Connect",
+	},
+	{
+		id:          "availability.territories.china_icp",
+		statuses:    []string{"ICP_NUMBER_MISSING", "ICP_NUMBER_INVALID"},
+		subject:     "a missing or invalid China mainland ICP Filing Number",
+		remediation: "Provide an ICP Filing Number that matches your MIIT filing, and metadata that matches it, under App Information in App Store Connect",
+	},
+	{
+		id: "availability.territories.korea_rating",
+		statuses: []string{
+			"CANNOT_SELL_CASINO_WITHOUT_GRAC",
+			"CANNOT_SELL_NINETEEN_PLUS_WITHOUT_GRAC",
+			"CANNOT_SELL_FREQUENT_INTENSE_WITHOUT_GRAC",
+			"CANNOT_SELL_FREQUENT_WITHOUT_GRAC",
+		},
+		subject:     "a missing Korea GRAC Rating Classification Number",
+		remediation: "Get a Rating Classification Number from Korea's Game Rating and Administration Committee and set it with `asc age-rating edit --app APP_ID --grac-rating-classification-number NUMBER`",
+	},
+	{
+		id:          "availability.territories.cannot_sell",
+		statuses:    []string{"BRAZIL_GAMBLING_NOT_VERIFIED"},
+		prefix:      "CANNOT_SELL_",
+		subject:     "a sale restriction",
+		remediation: "Open Pricing and Availability in App Store Connect and hold the pointer over each territory's status for Apple's reason",
+	},
 }
 
 // territoryContentStatusChecks reports the territory content statuses Apple
 // returns with the app's territory availabilities.
 func territoryContentStatusChecks(availabilityID string, statuses map[string][]string) []CheckResult {
+	byRule := make([][]string, len(territoryContentStatusRules))
+	for status := range statuses {
+		if index := territoryContentStatusRuleIndex(status); index >= 0 && len(statuses[status]) > 0 {
+			byRule[index] = append(byRule[index], status)
+		}
+	}
 	var checks []CheckResult
-	for _, rule := range territoryContentStatusRules {
-		var parts []string
+	for index, rule := range territoryContentStatusRules {
+		matched := byRule[index]
+		if len(matched) == 0 {
+			continue
+		}
+		slices.Sort(matched)
+		parts := make([]string, 0, len(matched))
 		territories := make(map[string]struct{})
-		for _, status := range rule.statuses {
+		for _, status := range matched {
 			ids := statuses[status]
-			if len(ids) == 0 {
-				continue
-			}
 			parts = append(parts, fmt.Sprintf("%s (%s)", status, strings.Join(ids, ", ")))
 			for _, id := range ids {
 				territories[id] = struct{}{}
 			}
-		}
-		if len(parts) == 0 {
-			continue
 		}
 		checks = append(checks, CheckResult{
 			ID:           rule.id,
@@ -147,6 +203,22 @@ func territoryContentStatusChecks(availabilityID string, statuses map[string][]s
 		})
 	}
 	return checks
+}
+
+func territoryContentStatusRuleIndex(status string) int {
+	for index, rule := range territoryContentStatusRules {
+		for _, listed := range rule.statuses {
+			if status == listed {
+				return index
+			}
+		}
+	}
+	for index, rule := range territoryContentStatusRules {
+		if rule.prefix != "" && strings.HasPrefix(status, rule.prefix) {
+			return index
+		}
+	}
+	return -1
 }
 
 func pluralTerritories(count int) string {

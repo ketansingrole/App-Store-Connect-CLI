@@ -344,15 +344,18 @@ func reviewDetailsResolutionField(field string) (string, string) {
 	}
 }
 
-// BusinessAppStoreConnectURL is App Store Connect Business, where agreements
-// and the EU Digital Services Act trader status are managed.
+// BusinessAppStoreConnectURL is App Store Connect Business, where agreements,
+// tax information, and the EU Digital Services Act trader status are managed.
 const BusinessAppStoreConnectURL = "https://appstoreconnect.apple.com/business"
 
 func defaultManualResolution(appID, checkID string) *Resolution {
 	appURL := appStoreConnectAppURL(appID, "")
 	switch {
-	case checkID == "availability.territories.trader_status":
+	case checkID == "availability.territories.trader_status", checkID == "availability.territories.brazil_tax_id":
 		appURL = BusinessAppStoreConnectURL
+	case checkID == "availability.territories.missing_rating", checkID == "availability.territories.korea_rating",
+		strings.HasPrefix(checkID, "availability.territories.china_"):
+		appURL = appStoreConnectAppURL(appID, "distribution/info")
 	case strings.HasPrefix(checkID, "availability."), strings.HasPrefix(checkID, "pricing."):
 		appURL = appStoreConnectAppURL(appID, "appstore/pricing")
 	case strings.HasPrefix(checkID, "review_details."):

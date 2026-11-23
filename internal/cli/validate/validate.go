@@ -80,6 +80,7 @@ Checks:
   - Attached build against the upload requirement Apple announced for April 2027
   - App content rights declaration
   - Pricing schedule, base territory price (Free counts), and territory availability
+  - Territory statuses that keep the app off sale (warning): EU trader status, age rating, Brazil tax ID, China mainland ICP and game approval numbers, Korea GRAC number, and other sale restrictions
   - Screenshot presence and size compatibility
   - Screenshot, app preview, and asset library placement delivery per locale
   - Required iPad screenshots for builds that run on iPad (--ipa)

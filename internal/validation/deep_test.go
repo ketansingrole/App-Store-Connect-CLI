@@ -105,6 +105,24 @@ func TestApplyDeepValidationLinksTraderStatusToBusiness(t *testing.T) {
 	}
 }
 
+func TestApplyDeepValidationLinksTerritoryStatusesToTheirFix(t *testing.T) {
+	tests := map[string]string{
+		"availability.territories.missing_rating":      "https://appstoreconnect.apple.com/apps/app-1/distribution/info",
+		"availability.territories.china_icp":           "https://appstoreconnect.apple.com/apps/app-1/distribution/info",
+		"availability.territories.china_game_approval": "https://appstoreconnect.apple.com/apps/app-1/distribution/info",
+		"availability.territories.korea_rating":        "https://appstoreconnect.apple.com/apps/app-1/distribution/info",
+		"availability.territories.brazil_tax_id":       "https://appstoreconnect.apple.com/business",
+		"availability.territories.cannot_sell":         "https://appstoreconnect.apple.com/apps/app-1/appstore/pricing",
+	}
+	for id, want := range tests {
+		report := Report{AppID: "app-1", Checks: []CheckResult{{ID: id, Severity: SeverityWarning, Remediation: "Fix it"}}}
+		resolution := ApplyDeepValidation(report, DeepReport{}, nil).Checks[0].Resolution
+		if resolution == nil || resolution.AppStoreConnectURL != want {
+			t.Errorf("%s resolution = %#v, want %s", id, resolution, want)
+		}
+	}
+}
+
 func TestDeepValidationJSONIsAdditiveAndCamelCase(t *testing.T) {
 	report := Report{
 		AppID: "app-1",

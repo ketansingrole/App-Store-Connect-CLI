@@ -176,3 +176,62 @@ func TestTerritoryContentStatusChecksReportTraderStatus(t *testing.T) {
 		t.Fatalf("expected no finding without a trader status, got %v", got)
 	}
 }
+
+func TestTerritoryContentStatusChecksReportBlockingStatuses(t *testing.T) {
+	tests := []struct {
+		status, wantID, wantRemediation string
+	}{
+		{"MISSING_RATING", "availability.territories.missing_rating", "asc age-rating edit"},
+		{"BRAZIL_REQUIRED_TAX_ID", "availability.territories.brazil_tax_id", "Business > Tax"},
+		{"MISSING_GRN", "availability.territories.china_game_approval", "App Information"},
+		{"UNVERIFIED_GRN", "availability.territories.china_game_approval", "App Information"},
+		{"ICP_NUMBER_MISSING", "availability.territories.china_icp", "App Information"},
+		{"ICP_NUMBER_INVALID", "availability.territories.china_icp", "App Information"},
+		{"CANNOT_SELL_CASINO_WITHOUT_GRAC", "availability.territories.korea_rating", "--grac-rating-classification-number"},
+		{"CANNOT_SELL_NINETEEN_PLUS_WITHOUT_GRAC", "availability.territories.korea_rating", "--grac-rating-classification-number"},
+		{"CANNOT_SELL_SEVENTEEN_PLUS_APPS", "availability.territories.cannot_sell", "hold the pointer over"},
+		{"BRAZIL_GAMBLING_NOT_VERIFIED", "availability.territories.cannot_sell", "hold the pointer over"},
+		// A value Apple adds later still reports the restriction.
+		{"CANNOT_SELL_SOMETHING_NEW", "availability.territories.cannot_sell", "hold the pointer over"},
+	}
+	for _, test := range tests {
+		checks := territoryContentStatusChecks("avail-1", map[string][]string{test.status: {"BRA", "CHN"}})
+		if len(checks) != 1 || checks[0].ID != test.wantID || checks[0].Severity != SeverityWarning {
+			t.Errorf("%s: expected one %s warning, got %+v", test.status, test.wantID, checks)
+			continue
+		}
+		if !strings.Contains(checks[0].Message, test.status+" (BRA, CHN)") || !strings.Contains(checks[0].Remediation, test.wantRemediation) {
+			t.Errorf("%s: unexpected finding %+v", test.status, checks[0])
+		}
+	}
+}
+
+func TestTerritoryContentStatusChecksIgnoreInformationalStatuses(t *testing.T) {
+	// An app that was never released reports CANNOT_SELL together with
+	// AVAILABLE_FOR_SALE_UNRELEASED_APP in every territory (observed live).
+	checks := territoryContentStatusChecks("avail-1", map[string][]string{
+		"CANNOT_SELL":                       {"FRA", "USA"},
+		"AVAILABLE_FOR_SALE_UNRELEASED_APP": {"FRA", "USA"},
+		"AVAILABLE":                         {"DEU"},
+		"AVAILABLE_FOR_PREORDER":            {"JPN"},
+		"PREORDER_ON_UNRELEASED_APP":        {"JPN"},
+		"PROCESSING_TO_AVAILABLE":           {"GBR"},
+		"SOMETHING_NEW":                     {"ITA"},
+	})
+	if len(checks) != 0 {
+		t.Fatalf("expected no findings for informational statuses, got %+v", checks)
+	}
+}
+
+func TestTerritoryContentStatusChecksReportEachStatusOnce(t *testing.T) {
+	checks := territoryContentStatusChecks("avail-1", map[string][]string{
+		"CANNOT_SELL_CASINO_WITHOUT_GRAC": {"KOR"},
+		"CANNOT_SELL_ADULT_ONLY":          {"CHN"},
+	})
+	if len(checks) != 2 || checks[0].ID != "availability.territories.korea_rating" || checks[1].ID != "availability.territories.cannot_sell" {
+		t.Fatalf("expected a Korea finding then a sale restriction, got %+v", checks)
+	}
+	if strings.Contains(checks[1].Message, "KOR") || !strings.Contains(checks[1].Message, "1 territory") {
+		t.Fatalf("a status matched by a specific rule must not repeat in the sale restriction: %+v", checks[1])
+	}
+}
