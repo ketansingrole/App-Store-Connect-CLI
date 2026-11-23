@@ -1,6 +1,9 @@
 package validation
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestPricingChecks_MissingSchedule(t *testing.T) {
 	checks := pricingChecks("app-1", "", false, "", "")
@@ -149,5 +152,27 @@ func TestValidateUsesPricingUniverseInsteadOfAppSaleAvailabilityForSubscriptionM
 
 	if !hasCheckID(report.Checks, "subscriptions.pricing.partial_territory_coverage") {
 		t.Fatalf("expected unified validate to require the full pricing universe, got %+v", report.Checks)
+	}
+}
+
+func TestTerritoryContentStatusChecksReportTraderStatus(t *testing.T) {
+	checks := territoryContentStatusChecks("avail-1", map[string][]string{
+		"TRADER_STATUS_NOT_PROVIDED":        {"AUT", "FRA"},
+		"TRADER_STATUS_VERIFICATION_FAILED": {"DEU"},
+		"CANNOT_SELL":                       {"USA"},
+	})
+	if len(checks) != 1 || checks[0].ID != "availability.territories.trader_status" || checks[0].Severity != SeverityWarning {
+		t.Fatalf("expected one trader status warning, got %v", checks)
+	}
+	for _, want := range []string{"TRADER_STATUS_NOT_PROVIDED (AUT, FRA)", "TRADER_STATUS_VERIFICATION_FAILED (DEU)"} {
+		if !strings.Contains(checks[0].Message, want) {
+			t.Fatalf("message %q is missing %q", checks[0].Message, want)
+		}
+	}
+	if strings.Contains(checks[0].Message, "USA") || !strings.Contains(checks[0].Remediation, "asc web business trader-status") {
+		t.Fatalf("unexpected trader status finding %+v", checks[0])
+	}
+	if got := territoryContentStatusChecks("avail-1", map[string][]string{"AVAILABLE": {"USA"}}); len(got) != 0 {
+		t.Fatalf("expected no finding without a trader status, got %v", got)
 	}
 }

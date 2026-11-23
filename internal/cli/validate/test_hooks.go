@@ -78,7 +78,7 @@ func SetFetchAvailableTerritoriesFunc(fn func(context.Context, *asc.Client, stri
 	if fn == nil {
 		fetchAvailableTerritoryDetailsFn = fetchAvailableTerritoryDetails
 	} else {
-		fetchAvailableTerritoryDetailsFn = func(ctx context.Context, client *asc.Client, appID string) (string, []string, int, error) {
+		fetchAvailableTerritoryDetailsFn = func(ctx context.Context, client *asc.Client, appID string) (string, []string, int, map[string][]string, error) {
 			type result struct {
 				availabilityID       string
 				availableTerritories int
@@ -87,7 +87,7 @@ func SetFetchAvailableTerritoriesFunc(fn func(context.Context, *asc.Client, stri
 				availabilityID, availableTerritories, requestErr := fn(requestCtx, client, appID)
 				return result{availabilityID: availabilityID, availableTerritories: availableTerritories}, requestErr
 			})
-			return value.availabilityID, nil, value.availableTerritories, err
+			return value.availabilityID, nil, value.availableTerritories, nil, err
 		}
 	}
 	return func() {

@@ -93,3 +93,65 @@ func availabilityChecks(appID string, availabilityID string, availableTerritorie
 		},
 	}
 }
+
+// territoryContentStatusRule groups territory content statuses that Apple
+// reports for one cause into a single finding.
+type territoryContentStatusRule struct {
+	id          string
+	statuses    []string
+	subject     string
+	remediation string
+}
+
+var territoryContentStatusRules = []territoryContentStatusRule{
+	{
+		id: "availability.territories.trader_status",
+		statuses: []string{
+			"TRADER_STATUS_NOT_PROVIDED",
+			"TRADER_STATUS_VERIFICATION_FAILED",
+			"TRADER_STATUS_VERIFICATION_STATUS_MISSING",
+		},
+		subject:     "an EU Digital Services Act trader status problem",
+		remediation: "Have the Account Holder or an Admin provide or fix the trader status in App Store Connect > Business > Digital Services Act, then check it with `asc web business trader-status`",
+	},
+}
+
+// territoryContentStatusChecks reports the territory content statuses Apple
+// returns with the app's territory availabilities.
+func territoryContentStatusChecks(availabilityID string, statuses map[string][]string) []CheckResult {
+	var checks []CheckResult
+	for _, rule := range territoryContentStatusRules {
+		var parts []string
+		territories := make(map[string]struct{})
+		for _, status := range rule.statuses {
+			ids := statuses[status]
+			if len(ids) == 0 {
+				continue
+			}
+			parts = append(parts, fmt.Sprintf("%s (%s)", status, strings.Join(ids, ", ")))
+			for _, id := range ids {
+				territories[id] = struct{}{}
+			}
+		}
+		if len(parts) == 0 {
+			continue
+		}
+		checks = append(checks, CheckResult{
+			ID:           rule.id,
+			Severity:     SeverityWarning,
+			Field:        "territoryAvailabilities",
+			ResourceType: "appAvailabilityV2",
+			ResourceID:   strings.TrimSpace(availabilityID),
+			Message:      fmt.Sprintf("Apple reports %s for %d %s: %s", rule.subject, len(territories), pluralTerritories(len(territories)), strings.Join(parts, "; ")),
+			Remediation:  rule.remediation,
+		})
+	}
+	return checks
+}
+
+func pluralTerritories(count int) string {
+	if count == 1 {
+		return "territory"
+	}
+	return "territories"
+}

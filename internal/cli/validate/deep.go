@@ -118,7 +118,7 @@ func buildDeepValidation(ctx context.Context, report validation.Report, client d
 			unverifiedWebCheck(validation.DeepCheckPrivacyPublishState, "App Privacy publication could not be verified "+sessionReason, appStoreConnectURL(report.AppID, "appPrivacy")),
 			unverifiedWebCheck(validation.DeepCheckSubscriptionAttachment, "First auto-renewable subscription attachment could not be verified "+sessionReason, appStoreConnectURL(report.AppID, "appstore/review")),
 			unverifiedWebCheck(validation.DeepCheckAgreementsActive, "Required agreements could not be verified "+sessionReason, agreementsAppStoreConnectURL),
-			unverifiedWebCheck(validation.DeepCheckDSATraderStatus, "EU trader status could not be verified "+sessionReason, businessAppStoreConnectURL),
+			unverifiedWebCheck(validation.DeepCheckDSATraderStatus, "EU trader status could not be verified "+sessionReason, validation.BusinessAppStoreConnectURL),
 		)
 		findings = append(findings, validation.CheckResult{
 			ID:           findingID,

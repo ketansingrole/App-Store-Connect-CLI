@@ -118,7 +118,7 @@ func buildSubscriptionsReport(ctx context.Context, client *asc.Client, opts Subs
 	if err := runReadinessTasks(
 		ctx,
 		func(taskCtx context.Context) error {
-			_, territories, count, fetchErr := fetchAvailableTerritoryDetailsFn(taskCtx, client, opts.AppID)
+			_, territories, count, _, fetchErr := fetchAvailableTerritoryDetailsFn(taskCtx, client, opts.AppID)
 			if fetchErr != nil {
 				if reason, ok := availabilityCheckSkipReason(fetchErr); ok {
 					appAvailabilityCoverageSkipReason = reason

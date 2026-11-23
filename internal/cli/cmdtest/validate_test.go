@@ -1810,6 +1810,16 @@ func TestValidateReportsCheckForFixtureChange(t *testing.T) {
 			wantBlocking: true,
 		},
 		{
+			name: "EU trader status reported for territories",
+			mutate: func(f *validateFixture) {
+				f.territories = `{"data":[` +
+					`{"type":"territoryAvailabilities","id":"ta-fra","attributes":{"available":true,"contentStatuses":["TRADER_STATUS_NOT_PROVIDED"]},"relationships":{"territory":{"data":{"type":"territories","id":"FRA"}}}},` +
+					`{"type":"territoryAvailabilities","id":"ta-usa","attributes":{"available":true,"contentStatuses":["AVAILABLE"]},"relationships":{"territory":{"data":{"type":"territories","id":"USA"}}}}]}`
+			},
+			wantCheck:    "availability.territories.trader_status",
+			wantSeverity: validation.SeverityWarning,
+		},
+		{
 			name: "subscription needs attention",
 			mutate: func(f *validateFixture) {
 				f.subscriptionsByGroup["group-1"] = `{"data":[{"type":"subscriptions","id":"sub-1","attributes":{"name":"Monthly","productId":"com.example.monthly","state":"READY_TO_SUBMIT"}}]}`

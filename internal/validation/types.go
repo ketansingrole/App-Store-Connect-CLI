@@ -168,6 +168,7 @@ type Input struct {
 	PricingTerritories          []string
 	PricingTerritoryCount       int
 	AvailabilityFetchSkipReason string
+	TerritoryContentStatuses    map[string][]string
 	PricingCoverageSkipReason   string
 	ScreenshotSets              []ScreenshotSet
 	PreviewSets                 []PreviewSet

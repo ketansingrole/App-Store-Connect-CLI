@@ -15,26 +15,30 @@ import (
 
 var fetchAvailableTerritoryDetailsFn = fetchAvailableTerritoryDetails
 
-func fetchAvailableTerritoryDetails(ctx context.Context, client *asc.Client, appID string) (string, []string, int, error) {
+// fetchAvailableTerritoryDetails also returns the territories Apple reports
+// under each content status, for every territory whether or not it is
+// available.
+func fetchAvailableTerritoryDetails(ctx context.Context, client *asc.Client, appID string) (string, []string, int, map[string][]string, error) {
 	ctx = withReadinessRequestGate(ctx)
 	availabilityID := ""
 	availableTerritories := 0
 	decodedAvailableTerritories := 0
 	territoryIDs := make(map[string]struct{})
+	contentStatuses := make(map[string][]string)
 
 	availabilityResp, err := doReadinessRequest(ctx, func(requestCtx context.Context) (*asc.AppAvailabilityV2Response, error) {
 		return client.GetAppAvailabilityV2(requestCtx, appID)
 	})
 	if err != nil {
 		if shared.IsAppAvailabilityMissing(err) {
-			return "", nil, 0, nil
+			return "", nil, 0, nil, nil
 		}
-		return "", nil, 0, fmt.Errorf("failed to fetch app availability: %w", err)
+		return "", nil, 0, nil, fmt.Errorf("failed to fetch app availability: %w", err)
 	}
 
 	availabilityID = strings.TrimSpace(availabilityResp.Data.ID)
 	if availabilityID == "" {
-		return "", nil, 0, nil
+		return "", nil, 0, nil, nil
 	}
 
 	nextURL := ""
@@ -47,10 +51,11 @@ func fetchAvailableTerritoryDetails(ctx context.Context, client *asc.Client, app
 		})
 		err = requestErr
 		if err != nil {
-			return availabilityID, nil, availableTerritories, fmt.Errorf("failed to fetch territory availabilities: %w", err)
+			return availabilityID, nil, availableTerritories, nil, fmt.Errorf("failed to fetch territory availabilities: %w", err)
 		}
 
 		for _, territoryAvailability := range territoryResp.Data {
+			collectTerritoryContentStatuses(contentStatuses, territoryAvailability)
 			if territoryAvailability.Attributes.Available {
 				availableTerritories++
 				territoryID, err := territoryAvailabilityTerritoryID(territoryAvailability.Relationships)
@@ -73,11 +78,31 @@ func fetchAvailableTerritoryDetails(ctx context.Context, client *asc.Client, app
 		ids = append(ids, territoryID)
 	}
 	slices.Sort(ids)
+	for status := range contentStatuses {
+		slices.Sort(contentStatuses[status])
+	}
 	if availableTerritories > 0 && decodedAvailableTerritories != availableTerritories {
-		return availabilityID, nil, availableTerritories, nil
+		return availabilityID, nil, availableTerritories, contentStatuses, nil
 	}
 
-	return availabilityID, ids, availableTerritories, nil
+	return availabilityID, ids, availableTerritories, contentStatuses, nil
+}
+
+func collectTerritoryContentStatuses(statuses map[string][]string, territoryAvailability asc.Resource[asc.TerritoryAvailabilityAttributes]) {
+	if len(territoryAvailability.Attributes.ContentStatuses) == 0 {
+		return
+	}
+	territoryID, err := territoryAvailabilityTerritoryID(territoryAvailability.Relationships)
+	territoryID = strings.TrimSpace(territoryID)
+	if err != nil || territoryID == "" {
+		territoryID = strings.TrimSpace(territoryAvailability.ID)
+	}
+	for _, status := range territoryAvailability.Attributes.ContentStatuses {
+		status = strings.TrimSpace(status)
+		if status != "" && territoryID != "" {
+			statuses[status] = append(statuses[status], territoryID)
+		}
+	}
 }
 
 func territoryAvailabilityTerritoryID(raw json.RawMessage) (string, error) {

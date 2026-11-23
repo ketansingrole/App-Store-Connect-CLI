@@ -100,6 +100,7 @@ func BuildReadinessReportWith(ctx context.Context, d *shared.Deps, opts Readines
 	appAvailableTerritories := []string(nil)
 	availableTerritories := 0
 	availabilityFetchSkipReason := ""
+	territoryContentStatuses := map[string][]string(nil)
 	pricingTerritories := []string(nil)
 	pricingCoverageSkipReason := ""
 	var screenshotSets []validation.ScreenshotSet
@@ -174,7 +175,7 @@ func BuildReadinessReportWith(ctx context.Context, d *shared.Deps, opts Readines
 		},
 		func(taskCtx context.Context) error {
 			var fetchErr error
-			availabilityID, appAvailableTerritories, availableTerritories, fetchErr = fetchAvailableTerritoryDetailsFn(taskCtx, client, opts.AppID)
+			availabilityID, appAvailableTerritories, availableTerritories, territoryContentStatuses, fetchErr = fetchAvailableTerritoryDetailsFn(taskCtx, client, opts.AppID)
 			if fetchErr == nil {
 				return nil
 			}
@@ -183,6 +184,7 @@ func BuildReadinessReportWith(ctx context.Context, d *shared.Deps, opts Readines
 				availabilityID = ""
 				appAvailableTerritories = nil
 				availableTerritories = 0
+				territoryContentStatuses = nil
 				return nil
 			}
 			return fetchErr
@@ -360,6 +362,7 @@ func BuildReadinessReportWith(ctx context.Context, d *shared.Deps, opts Readines
 		PricingTerritories:          pricingTerritories,
 		PricingTerritoryCount:       len(pricingTerritories),
 		AvailabilityFetchSkipReason: availabilityFetchSkipReason,
+		TerritoryContentStatuses:    territoryContentStatuses,
 		PricingCoverageSkipReason:   pricingCoverageSkipReason,
 		ScreenshotSets:              screenshotSets,
 		PreviewSets:                 mediaDelivery.previewSets,

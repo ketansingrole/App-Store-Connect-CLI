@@ -9,8 +9,6 @@ import (
 	webcore "github.com/rudrankriyam/App-Store-Connect-CLI/internal/web"
 )
 
-const businessAppStoreConnectURL = "https://appstoreconnect.apple.com/business"
-
 const traderStatusFixRemediation = "Have the Account Holder or an Admin complete it in App Store Connect > Business > Digital Services Act; Apple requires it to make apps available in the EU. Check it with `asc web business trader-status`"
 
 // collectTraderStatusDeepCheck reports the EU Digital Services Act trader
@@ -22,7 +20,7 @@ func collectTraderStatusDeepCheck(ctx context.Context, client deepWebClient) (va
 	defer cancel()
 	info, err := client.GetSellerInfo(requestCtx)
 	if err != nil || info == nil {
-		check := unverifiedWebCheck(validation.DeepCheckDSATraderStatus, "EU trader status could not be verified through the cached Apple web session", businessAppStoreConnectURL)
+		check := unverifiedWebCheck(validation.DeepCheckDSATraderStatus, "EU trader status could not be verified through the cached Apple web session", validation.BusinessAppStoreConnectURL)
 		return check, unverifiedFinding("deep.dsa.trader_status.unverified", check.Message, "Retry after confirming the cached Apple web session can read App Store Connect Business, or inspect it with `asc web business trader-status`", "traderStatus", "", check.Resolution)
 	}
 
@@ -93,7 +91,7 @@ func traderEntityDescription(legalEntityID, label string) string {
 func blockedTraderStatus(findingID, message string) (validation.DeepCheck, *validation.CheckResult) {
 	resolution := &validation.Resolution{
 		Fixability:         validation.FixabilityManual,
-		AppStoreConnectURL: businessAppStoreConnectURL,
+		AppStoreConnectURL: validation.BusinessAppStoreConnectURL,
 	}
 	return validation.DeepCheck{
 		ID:         validation.DeepCheckDSATraderStatus,
@@ -112,7 +110,7 @@ func blockedTraderStatus(findingID, message string) (validation.DeepCheck, *vali
 }
 
 func unverifiedTraderStatus(message string) (validation.DeepCheck, *validation.CheckResult) {
-	check := unverifiedWebCheck(validation.DeepCheckDSATraderStatus, message, businessAppStoreConnectURL)
+	check := unverifiedWebCheck(validation.DeepCheckDSATraderStatus, message, validation.BusinessAppStoreConnectURL)
 	return check, unverifiedFinding("deep.dsa.trader_status.unverified", message, "Review it in App Store Connect > Business > Digital Services Act, or check again later with `asc web business trader-status`", "traderStatus", "", check.Resolution)
 }
 

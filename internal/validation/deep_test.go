@@ -88,6 +88,23 @@ func TestApplyDeepValidationClassifiesKnownPublicAPIRemediation(t *testing.T) {
 	}
 }
 
+func TestApplyDeepValidationLinksTraderStatusToBusiness(t *testing.T) {
+	report := Report{
+		AppID: "app-1",
+		Checks: []CheckResult{{
+			ID:          "availability.territories.trader_status",
+			Severity:    SeverityWarning,
+			Remediation: "Provide the trader status",
+		}},
+	}
+
+	resolution := ApplyDeepValidation(report, DeepReport{}, nil).Checks[0].Resolution
+	if resolution == nil || resolution.Fixability != FixabilityManual || len(resolution.Commands) != 0 ||
+		resolution.AppStoreConnectURL != "https://appstoreconnect.apple.com/business" {
+		t.Fatalf("trader status resolution = %#v, want manual fix in App Store Connect Business", resolution)
+	}
+}
+
 func TestDeepValidationJSONIsAdditiveAndCamelCase(t *testing.T) {
 	report := Report{
 		AppID: "app-1",
