@@ -115,3 +115,9 @@ func unverifiedTraderStatus(message string) (validation.DeepCheck, *validation.C
 	check := unverifiedWebCheck(validation.DeepCheckDSATraderStatus, message, businessAppStoreConnectURL)
 	return check, unverifiedFinding("deep.dsa.trader_status.unverified", message, "Review it in App Store Connect > Business > Digital Services Act, or check again later with `asc web business trader-status`", "traderStatus", "", check.Resolution)
 }
+
+// isTraderStatusContractMessage reports whether an App Store Connect contract
+// message is the EU trader status alert rather than an agreement alert.
+func isTraderStatusContractMessage(lowerText string) bool {
+	return strings.Contains(lowerText, "trader status") || strings.Contains(lowerText, "digital services act")
+}

@@ -471,6 +471,16 @@ func TestBuildDeepValidationUsesAgreementStatusAndMonetizationRelevance(t *testi
 			want:                validation.DeepStatusUnverified,
 		},
 		{
+			// Apple's trader status alert (live text, 2026-11-02) is checked by
+			// dsa.trader_status, not as agreement evidence.
+			name: "trader status alert leaves active agreements passing",
+			status: &asc.WebAgreementsStatusResult{Agreements: []asc.WebAgreement{{AgreementID: "pla", Status: "active", IsProgramLicenseAgreement: true}}, ContractMessages: []asc.WebAgreementContractMessage{{
+				Group:   "General",
+				Message: "Developers must provide their trader status to submit new apps or app updates for distribution in the European Union (EU). To comply with the Digital Services Act, your trader status must be provided or your apps will be removed from the App Store in the EU. For more information, contact an Admin or Account Holder.",
+			}}},
+			want: validation.DeepStatusPassed,
+		},
+		{
 			name:                  "paid agreement blocks monetized app",
 			hasActiveMonetization: true,
 			status:                &asc.WebAgreementsStatusResult{Agreements: []asc.WebAgreement{{AgreementID: "pla", Status: "active", IsProgramLicenseAgreement: true}}, ContractMessages: []asc.WebAgreementContractMessage{{Subject: "Paid Apps Agreement update"}}},

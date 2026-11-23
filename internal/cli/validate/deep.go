@@ -438,6 +438,10 @@ func collectAgreementsDeepCheck(ctx context.Context, client deepWebClient, requi
 	hasRelevantEvidence := false
 	for _, message := range status.ContractMessages {
 		messageText := strings.ToLower(strings.Join([]string{message.Group, message.Subject, message.Message}, " "))
+		if isTraderStatusContractMessage(messageText) {
+			// dsa.trader_status reads the trader status itself.
+			continue
+		}
 		if strings.Contains(messageText, "paid") {
 			switch {
 			case paidAgreementRelevanceKnown && !requiresPaidAgreement:
