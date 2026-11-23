@@ -422,7 +422,7 @@ func capabilityRows() []Capability {
 			Status:     statusWebSession,
 			Commands:   []string{"asc web apps declarations list"},
 			Notes: []string{
-				"App Store Regulations and Permits requirements are not present in the embedded public OpenAPI snapshot. Listing reports each app-scoped requirement Apple returns; the web command supports captured medical-device app-level declarations and the detailed regional setter, while personal-service and unsupported detailed medical fields remain website-only. EU DSA trader status is account-level and is not part of this listing.",
+				"App Store Regulations and Permits requirements are not present in the embedded public OpenAPI snapshot. Listing reports each app-scoped requirement Apple returns; the web command supports captured medical-device app-level declarations and the detailed regional setter, while personal-service and unsupported detailed medical fields remain website-only. EU DSA trader status is account-level and is not part of this listing; read it with asc web business trader-status.",
 			},
 			NextAction: "Use App Store Connect web UI, or asc web apps declarations list.",
 		},
@@ -731,6 +731,14 @@ func capabilityRows() []Capability {
 			Commands:   []string{"asc web business agreements"},
 			Notes:      []string{"Lists Business contracts and accepts an explicitly selected updated configuration, including the Paid Applications Schedule. Active contracts can still have updated terms pending. Developer Program licenses use asc web agreements instead."},
 			NextAction: "Use asc web business agreements list, review updated terms in Business, then accept with --contract-config-id and --confirm.",
+		},
+		{
+			Area:       "access",
+			Capability: "EU Digital Services Act trader status",
+			Status:     statusWebSession,
+			Commands:   []string{"asc web business trader-status"},
+			Notes:      []string{"Reads the account's trader declaration and each legal entity's verification status from App Store Connect Business. Declaring or changing trader status requires identity verification in App Store Connect and is not supported. The public API reports only per-territory consequences in TerritoryAvailability contentStatuses."},
+			NextAction: "Use asc web business trader-status, then declare or update trader status in App Store Connect > Business > Digital Services Act.",
 		},
 		{
 			Area:       "access",

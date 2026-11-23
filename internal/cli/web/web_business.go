@@ -16,10 +16,10 @@ func newWebBusinessCommand(d *shared.Deps) *ffcli.Command {
 	return &ffcli.Command{
 		Name:        "business",
 		ShortUsage:  "asc web business <subcommand> [flags]",
-		ShortHelp:   "Manage App Store Connect Business agreements.",
+		ShortHelp:   "Manage App Store Connect Business agreements and EU trader status.",
 		FlagSet:     d.NewFlagSet("web business", flag.ExitOnError),
 		UsageFunc:   d.DefaultUsageFunc,
-		Subcommands: []*ffcli.Command{newWebBusinessAgreementsCommand(d)},
+		Subcommands: []*ffcli.Command{newWebBusinessAgreementsCommand(d), newWebBusinessTraderStatusCommand(d)},
 		Exec:        func(context.Context, []string) error { return flag.ErrHelp },
 	}
 }
@@ -147,6 +147,68 @@ Example:
 			}
 			return d.PrintOutputRows(response.Raw, *output.Output, *output.Pretty,
 				[]string{"Contract ID", "Agreement", "Status", "Current Version", "New Configuration ID"}, rows)
+		},
+	}
+}
+
+// newWebBusinessTraderStatusCommand reads the EU Digital Services Act trader
+// status. Declaring it stays in App Store Connect, which verifies identity.
+func newWebBusinessTraderStatusCommand(d *shared.Deps) *ffcli.Command {
+	fs := d.NewFlagSet("web business trader-status", flag.ExitOnError)
+	authFlags := bindWebSessionFlags(fs)
+	output := d.BindOutputFlags(fs)
+	return &ffcli.Command{
+		Name:       "trader-status",
+		ShortUsage: "asc web business trader-status [flags]",
+		ShortHelp:  "Show the EU Digital Services Act trader status.",
+		LongHelp: `Show the selected provider's EU Digital Services Act (DSA) trader
+declaration and each legal entity's verification status, as App Store
+Connect Business shows them. Apple requires a declaration to make apps
+available in the EU. JSON preserves Apple's complete response.
+
+Trader Declaration is NOT_DECLARED, DECLARED_TRADER, or DECLARED_NOT_TRADER.
+Status is the label App Store Connect shows, such as Active, Verifying,
+In Review, Action Needed, or Rejected. Verification Status is Apple's raw
+value; a non-trader reports NOT_PROVIDED and shows Active.
+
+This command only reads. Declare or update trader status in App Store
+Connect > Business > Digital Services Act; a trader declaration requires
+identity verification there.
+
+Example:
+  asc web business trader-status --output table
+`,
+		FlagSet:   fs,
+		UsageFunc: d.DefaultUsageFunc,
+		Exec: func(ctx context.Context, args []string) error {
+			if _, err := shared.ValidateOutputFormat(*output.Output, *output.Pretty); err != nil {
+				return d.UsageError(err.Error())
+			}
+			session, requestCtx, cancel, err := resolveWebSessionForCommandWith(ctx, d, authFlags)
+			defer cancel()
+			if err != nil {
+				return withWebAuthHint(err, "web business trader-status")
+			}
+			info, err := newWebClientFn(session).GetSellerInfo(requestCtx)
+			if err != nil {
+				return withWebAuthHint(err, "web business trader-status")
+			}
+			headers := []string{"Trader Declaration", "Legal Entity ID", "EU Covered", "Status", "Verification Status", "Submitted"}
+			rows := make([][]string, 0, len(info.LegalEntities))
+			for _, entity := range info.LegalEntities {
+				status := string(entity.Status())
+				if status == "" {
+					status = entity.VerificationStatus
+				}
+				rows = append(rows, []string{
+					info.TraderDeclaration, entity.LegalEntityID, strconv.FormatBool(entity.IsEUCovered),
+					status, entity.VerificationStatus, entity.Submitted,
+				})
+			}
+			if len(rows) == 0 {
+				rows = append(rows, []string{info.TraderDeclaration, "", "", "", "", ""})
+			}
+			return d.PrintOutputRows(info.Raw, *output.Output, *output.Pretty, headers, rows)
 		},
 	}
 }
