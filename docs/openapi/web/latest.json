@@ -8609,6 +8609,49 @@
         ]
       }
     },
+    "/ppm/v1/accounts/{id}/sellerInfo": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "style": "simple",
+          "description": "The selected provider's public provider ID. Apple answers 403 for the numeric provider ID."
+        }
+      ],
+      "get": {
+        "tags": [
+          "SellerInfo"
+        ],
+        "operationId": "sellerInfo_getInstance",
+        "description": "EU Digital Services Act trader declaration and per-legal-entity verification status, as App Store Connect Business shows it.",
+        "responses": {
+          "2XX": {
+            "description": "Success. The schema lists the fields the client reads.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SellerInfoResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. The client reads the status code."
+          }
+        },
+        "x-asc-observed": {
+          "code": "2026-11-23",
+          "live": "2026-11-23"
+        },
+        "x-asc-source": [
+          "Client.GetSellerInfo"
+        ]
+      }
+    },
     "/sandbox/v2/account/create": {
       "post": {
         "tags": [
@@ -18451,6 +18494,58 @@
           "signatureData",
           "userHandle"
         ]
+      },
+      "SellerInfoResponse": {
+        "type": "object",
+        "title": "SellerInfoResponse",
+        "properties": {
+          "accountId": {
+            "type": "string"
+          },
+          "sellerInfo": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "coveredCountry": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "isEuCovered": {
+                  "type": "boolean"
+                },
+                "legalEntityId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "submitted": {
+                  "type": "string"
+                },
+                "verificationStatus": {
+                  "type": "string"
+                },
+                "verificationStatusLocKey": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": true
+            },
+            "nullable": true
+          },
+          "traderDeclaration": {
+            "type": "string",
+            "enum": [
+              "DECLARED_NOT_TRADER",
+              "DECLARED_TRADER",
+              "NOT_DECLARED"
+            ]
+          }
+        },
+        "additionalProperties": true
       },
       "SessionCreateRequest": {
         "type": "object",
