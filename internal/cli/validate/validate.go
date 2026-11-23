@@ -92,8 +92,8 @@ Deep validation:
   IAP attachment to the selected app version through the public API. Missing
   required attachment blocks; incomplete evidence remains unverified. It also
   adds read-only checks from an existing cached Apple web session for
-  App Privacy publication, required agreements, and first-of-type subscription
-  attachment. It also classifies every actionable finding as api-fixable,
+  App Privacy publication, required agreements, first-of-type subscription
+  attachment, and the EU Digital Services Act trader status. It also classifies every actionable finding as api-fixable,
   web-fixable, or manual and returns exact available commands and App Store
   Connect links. Deep validation never starts an interactive login.
 

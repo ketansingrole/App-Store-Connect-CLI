@@ -65,6 +65,7 @@ const (
 	DeepCheckIAPAttachment             = "iap.first_type_app_version_attachment"
 	DeepCheckSubscriptionAttachment    = "subscriptions.first_type_app_version_attachment"
 	DeepCheckAgreementsActive          = "agreements.active"
+	DeepCheckDSATraderStatus           = "dsa.trader_status"
 	DeepCheckAvailabilityConfigured    = "availability.configured"
 	DeepCheckReviewInformationComplete = "review_information.required_fields"
 )

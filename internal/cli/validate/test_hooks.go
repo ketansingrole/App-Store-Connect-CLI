@@ -15,6 +15,7 @@ type DeepValidationWebClient interface {
 	GetAppDataUsagesPublishState(context.Context, string) (*webcore.AppDataUsagesPublishState, error)
 	ListReviewSubscriptions(context.Context, string) ([]webcore.ReviewSubscription, error)
 	GetAgreementsStatus(context.Context) (*asc.WebAgreementsStatusResult, error)
+	GetSellerInfo(context.Context) (*webcore.SellerInfo, error)
 }
 
 // SetDeepValidationTestHooks replaces cached-session loading and the web client

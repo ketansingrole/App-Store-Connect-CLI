@@ -32,6 +32,17 @@ repository already has read clients:
    messages.
 3. First auto-renewable subscription attachment when no subscription is yet
    approved and at least one subscription is `READY_TO_SUBMIT`.
+4. EU Digital Services Act trader status (`dsa.trader_status`). Apple requires
+   a trader declaration to make apps available in the EU.
+
+The trader status check passes when the account declared its status and every
+legal entity that covers the EU shows Active, the label App Store Connect
+chooses through `verificationStatusLocKey`. The raw `verificationStatus` is
+not used to decide, because a declared non-trader reports `NOT_PROVIDED` and
+shows Active. `NOT_DECLARED`, Action Needed, Rejected, and Not Declared block.
+Verifying, In Review, Unknown, an unrecognized label, an unknown declaration,
+or a declaration without legal entities is `unverified`. When no legal entity
+covers the EU, the check is `notApplicable`.
 
 The private subscription field describes attachment to the app's next version,
 not an arbitrary selected version. Deep mode evaluates it only when the selected
@@ -61,7 +72,7 @@ supplies resolution data.
 
 Deep mode also adds a structured `deep` section. It reports the cached-session
 status and one deterministic result for privacy publication, subscription
-attachment, agreements, availability, and review information. Status is one of
+attachment, agreements, EU trader status, availability, and review information. Status is one of
 `passed`, `blocked`, `unverified`, or `notApplicable`; source is one of
 `publicApi`, `webSession`, or `manual`. Availability and review information are
 derived from the existing public checks, so their presence in this section does
@@ -107,6 +118,8 @@ Deep mode reuses the existing private web-session readers:
 - `GET /contractMessages` plus the read-only Developer Portal agreement-history
   request at `/services-account/QH65B2/account/getAgreementHistory`, decoded as
   `WebAgreementsStatusResult { pending, contractMessages, agreements }`.
+- `GET /ppm/v1/accounts/{publicProviderId}/sellerInfo`, decoded as
+  `SellerInfo { traderDeclaration, legalEntities }`.
 
 Although agreement history uses Apple's POST-shaped private read endpoint, deep
 validation sends no mutation request. App Privacy publication and subscription
@@ -127,8 +140,9 @@ exported camelCase structs.
 
 Successful web checks stay in the deep section so callers can distinguish
 "verified" from "not checked" without adding issue-shaped root checks. An
-unpublished privacy state, pending agreement, or missing required first-of-type
-subscription attachment is an error-severity root finding. An unverifiable
+unpublished privacy state, pending agreement, missing required first-of-type
+subscription attachment, or EU trader status that is undeclared or needs action
+is an error-severity root finding. An unverifiable
 requested deep check is a warning, preserving the report while making
 `--strict` the explicit fail-closed policy. The complete report is printed to
 stdout before the command returns the existing validation reported-error exit
@@ -162,6 +176,8 @@ RED coverage precedes implementation for:
 - cached-session missing and expired behavior without an interactive prompt.
 - published and unpublished App Privacy states.
 - active and pending agreement states.
+- declared, undeclared, in-progress, rejected, unrecognized, and non-EU trader
+  statuses, and a failed trader status read.
 - free, upfront-paid, and incomplete app-pricing evidence for agreement scope.
 - no subscriptions, no ready subscriptions, attached ready subscriptions, and
   ready-but-unattached first-of-type subscriptions, including a selected

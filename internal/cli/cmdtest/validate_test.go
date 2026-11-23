@@ -27,6 +27,7 @@ type validateDeepWebFixture struct {
 	privacy       *webcore.AppDataUsagesPublishState
 	subscriptions []webcore.ReviewSubscription
 	agreements    *asc.WebAgreementsStatusResult
+	sellerInfo    *webcore.SellerInfo
 }
 
 func (f *validateDeepWebFixture) GetAppDataUsagesPublishState(context.Context, string) (*webcore.AppDataUsagesPublishState, error) {
@@ -39,6 +40,10 @@ func (f *validateDeepWebFixture) ListReviewSubscriptions(context.Context, string
 
 func (f *validateDeepWebFixture) GetAgreementsStatus(context.Context) (*asc.WebAgreementsStatusResult, error) {
 	return f.agreements, nil
+}
+
+func (f *validateDeepWebFixture) GetSellerInfo(context.Context) (*webcore.SellerInfo, error) {
+	return f.sellerInfo, nil
 }
 
 type validateFixture struct {
@@ -837,10 +842,10 @@ func TestValidateDeepWithoutCachedSessionReturnsStructuredUnverifiedResults(t *t
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("failed to decode deep report: %v; stdout=%q", err, stdout)
 	}
-	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionUnavailable || len(report.Deep.Checks) != 6 {
+	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionUnavailable || len(report.Deep.Checks) != 7 {
 		t.Fatalf("deep report = %#v", report.Deep)
 	}
-	if report.Deep.Summary.Unverified != 3 || report.Deep.Summary.Passed != 2 {
+	if report.Deep.Summary.Unverified != 4 || report.Deep.Summary.Passed != 2 {
 		t.Fatalf("deep summary = %#v", report.Deep.Summary)
 	}
 	foundPrivacyAdvisory := false
@@ -878,6 +883,10 @@ func TestValidateDeepCachedSessionRunsAllFiveChecksThroughCommand(t *testing.T) 
 		privacy:       &webcore.AppDataUsagesPublishState{ID: "publish-1", Published: true, PublishedKnown: true},
 		subscriptions: []webcore.ReviewSubscription{{ID: "sub-1", State: "APPROVED", SubmitWithNextAppStoreVersionKnown: true}},
 		agreements:    &asc.WebAgreementsStatusResult{Agreements: []asc.WebAgreement{{Status: "active", IsProgramLicenseAgreement: true}}},
+		sellerInfo: &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationNotTrader, LegalEntities: []webcore.SellerLegalEntity{{
+			LegalEntityID: "entity-1", IsEUCovered: true, VerificationStatus: "NOT_PROVIDED",
+			VerificationStatusLocKey: "PPM.agreements.UI.DSA.compliance.status.active",
+		}}},
 	}
 	restoreDeep := validate.SetDeepValidationTestHooks(
 		func(context.Context, string) (*webcore.AuthSession, bool, error) {
@@ -899,10 +908,10 @@ func TestValidateDeepCachedSessionRunsAllFiveChecksThroughCommand(t *testing.T) 
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("decode deep report: %v; stdout=%q", err, stdout)
 	}
-	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionCached || len(report.Deep.Checks) != 6 {
+	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionCached || len(report.Deep.Checks) != 7 {
 		t.Fatalf("deep report = %#v", report.Deep)
 	}
-	if report.Deep.Summary.Passed != 4 || report.Deep.Summary.NotApplicable != 2 {
+	if report.Deep.Summary.Passed != 5 || report.Deep.Summary.NotApplicable != 2 {
 		t.Fatalf("deep summary = %#v", report.Deep.Summary)
 	}
 	for _, check := range report.Deep.Checks {
@@ -951,7 +960,7 @@ func TestValidateDeepReturnsStructuredFallbackWhenRequiredAgreementBlocksPublicA
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("decode fallback report: %v; stdout=%q", err, stdout)
 	}
-	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionUnavailable || len(report.Deep.Checks) != 6 {
+	if report.Deep == nil || report.Deep.SessionStatus != validation.DeepSessionUnavailable || len(report.Deep.Checks) != 7 {
 		t.Fatalf("deep fallback = %#v", report.Deep)
 	}
 	iapFound := false

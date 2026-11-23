@@ -21,6 +21,7 @@ type deepWebClient interface {
 	GetAppDataUsagesPublishState(context.Context, string) (*webcore.AppDataUsagesPublishState, error)
 	ListReviewSubscriptions(context.Context, string) ([]webcore.ReviewSubscription, error)
 	GetAgreementsStatus(context.Context) (*asc.WebAgreementsStatusResult, error)
+	GetSellerInfo(context.Context) (*webcore.SellerInfo, error)
 }
 
 var (
@@ -117,6 +118,7 @@ func buildDeepValidation(ctx context.Context, report validation.Report, client d
 			unverifiedWebCheck(validation.DeepCheckPrivacyPublishState, "App Privacy publication could not be verified "+sessionReason, appStoreConnectURL(report.AppID, "appPrivacy")),
 			unverifiedWebCheck(validation.DeepCheckSubscriptionAttachment, "First auto-renewable subscription attachment could not be verified "+sessionReason, appStoreConnectURL(report.AppID, "appstore/review")),
 			unverifiedWebCheck(validation.DeepCheckAgreementsActive, "Required agreements could not be verified "+sessionReason, agreementsAppStoreConnectURL),
+			unverifiedWebCheck(validation.DeepCheckDSATraderStatus, "EU trader status could not be verified "+sessionReason, businessAppStoreConnectURL),
 		)
 		findings = append(findings, validation.CheckResult{
 			ID:           findingID,
@@ -148,6 +150,12 @@ func buildDeepValidation(ctx context.Context, report validation.Report, client d
 		deep.Checks = append(deep.Checks, agreements)
 		if agreementFinding != nil {
 			findings = append(findings, *agreementFinding)
+		}
+
+		traderStatus, traderStatusFinding := collectTraderStatusDeepCheck(ctx, client)
+		deep.Checks = append(deep.Checks, traderStatus)
+		if traderStatusFinding != nil {
+			findings = append(findings, *traderStatusFinding)
 		}
 	}
 

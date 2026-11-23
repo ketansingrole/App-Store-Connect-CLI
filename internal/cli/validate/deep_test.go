@@ -22,6 +22,8 @@ type stubDeepWebClient struct {
 	subscriptionsErr error
 	agreements       *asc.WebAgreementsStatusResult
 	agreementsErr    error
+	sellerInfo       *webcore.SellerInfo
+	sellerInfoErr    error
 }
 
 func (c *stubDeepWebClient) GetAppDataUsagesPublishState(context.Context, string) (*webcore.AppDataUsagesPublishState, error) {
@@ -34,6 +36,139 @@ func (c *stubDeepWebClient) ListReviewSubscriptions(context.Context, string) ([]
 
 func (c *stubDeepWebClient) GetAgreementsStatus(context.Context) (*asc.WebAgreementsStatusResult, error) {
 	return c.agreements, c.agreementsErr
+}
+
+func (c *stubDeepWebClient) GetSellerInfo(context.Context) (*webcore.SellerInfo, error) {
+	return c.sellerInfo, c.sellerInfoErr
+}
+
+// activeNonTrader is a declared non-trader whose EU entity shows Active.
+func activeNonTrader() *webcore.SellerInfo {
+	return &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationNotTrader, LegalEntities: []webcore.SellerLegalEntity{traderEntity("entity-1", true, "active")}}
+}
+
+func traderEntity(id string, euCovered bool, label string) webcore.SellerLegalEntity {
+	return webcore.SellerLegalEntity{
+		LegalEntityID:            id,
+		IsEUCovered:              euCovered,
+		VerificationStatus:       "RAW_STATUS",
+		VerificationStatusLocKey: "PPM.agreements.UI.DSA.compliance.status." + label,
+	}
+}
+
+func TestBuildDeepValidationReportsEUTraderStatus(t *testing.T) {
+	tests := []struct {
+		name        string
+		info        *webcore.SellerInfo
+		err         error
+		want        validation.DeepStatus
+		wantFinding string
+		wantInMsg   string
+	}{
+		{
+			name: "declared non-trader shown as active passes",
+			info: &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationNotTrader, LegalEntities: []webcore.SellerLegalEntity{traderEntity("entity-1", true, "active")}},
+			want: validation.DeepStatusPassed,
+		},
+		{
+			name:        "undeclared trader status blocks",
+			info:        &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationNotDeclared},
+			want:        validation.DeepStatusBlocked,
+			wantFinding: "dsa.trader_status.not_declared",
+		},
+		{
+			name:        "action needed on an EU entity blocks",
+			info:        &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationTrader, LegalEntities: []webcore.SellerLegalEntity{traderEntity("entity-1", true, "actionNeeded")}},
+			want:        validation.DeepStatusBlocked,
+			wantFinding: "dsa.trader_status.action_needed",
+			wantInMsg:   "entity-1 (Action Needed)",
+		},
+		{
+			name:        "rejected EU entity blocks",
+			info:        &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationTrader, LegalEntities: []webcore.SellerLegalEntity{traderEntity("entity-1", true, "active"), traderEntity("entity-2", true, "rejected")}},
+			want:        validation.DeepStatusBlocked,
+			wantFinding: "dsa.trader_status.action_needed",
+			wantInMsg:   "entity-2 (Rejected)",
+		},
+		{
+			name: "entity outside the EU is ignored",
+			info: &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationTrader, LegalEntities: []webcore.SellerLegalEntity{traderEntity("entity-1", true, "active"), traderEntity("entity-2", false, "actionNeeded")}},
+			want: validation.DeepStatusPassed,
+		},
+		{
+			name: "no EU entity is not applicable",
+			info: &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationNotTrader, LegalEntities: []webcore.SellerLegalEntity{traderEntity("entity-1", false, "active")}},
+			want: validation.DeepStatusNotApplicable,
+		},
+		{
+			name:        "verification in progress is unverified",
+			info:        &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationTrader, LegalEntities: []webcore.SellerLegalEntity{traderEntity("entity-1", true, "verifying")}},
+			want:        validation.DeepStatusUnverified,
+			wantFinding: "deep.dsa.trader_status.unverified",
+			wantInMsg:   "entity-1 (Verifying)",
+		},
+		{
+			name:        "unrecognized label is unverified",
+			info:        &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationTrader, LegalEntities: []webcore.SellerLegalEntity{traderEntity("entity-1", true, "somethingNew")}},
+			want:        validation.DeepStatusUnverified,
+			wantFinding: "deep.dsa.trader_status.unverified",
+			wantInMsg:   "entity-1 (RAW_STATUS)",
+		},
+		{
+			name:        "declared without legal entities is unverified",
+			info:        &webcore.SellerInfo{TraderDeclaration: webcore.TraderDeclarationNotTrader},
+			want:        validation.DeepStatusUnverified,
+			wantFinding: "deep.dsa.trader_status.unverified",
+		},
+		{
+			name:        "unknown declaration is unverified",
+			info:        &webcore.SellerInfo{TraderDeclaration: "SOMETHING_NEW"},
+			want:        validation.DeepStatusUnverified,
+			wantFinding: "deep.dsa.trader_status.unverified",
+		},
+		{
+			name:        "read failure is unverified without Apple's error text",
+			err:         errors.New("provider response with sensitive details"),
+			want:        validation.DeepStatusUnverified,
+			wantFinding: "deep.dsa.trader_status.unverified",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client := &stubDeepWebClient{sellerInfo: test.info, sellerInfoErr: test.err}
+			deep, findings := buildDeepValidation(context.Background(), validation.Report{AppID: "app-1"}, client, validation.DeepSessionCached)
+			check := deepCheckByID(t, deep, validation.DeepCheckDSATraderStatus)
+			if check.Status != test.want || check.Source != validation.DeepSourceWebSession {
+				t.Fatalf("trader status check = %#v, want %q", check, test.want)
+			}
+			if strings.Contains(check.Message, "sensitive") || !strings.Contains(check.Message, test.wantInMsg) {
+				t.Fatalf("trader status message = %q, want it to contain %q", check.Message, test.wantInMsg)
+			}
+			var finding *validation.CheckResult
+			for i := range findings {
+				if strings.Contains(findings[i].ID, "trader_status") {
+					finding = &findings[i]
+				}
+			}
+			if test.wantFinding == "" {
+				if finding != nil {
+					t.Fatalf("unexpected trader status finding %#v", finding)
+				}
+				return
+			}
+			if finding == nil || finding.ID != test.wantFinding {
+				t.Fatalf("trader status finding = %#v, want %q", finding, test.wantFinding)
+			}
+			wantSeverity := validation.SeverityWarning
+			if test.want == validation.DeepStatusBlocked {
+				wantSeverity = validation.SeverityError
+			}
+			if finding.Severity != wantSeverity || !strings.Contains(finding.Remediation, "asc web business trader-status") ||
+				finding.Resolution == nil || finding.Resolution.Fixability != validation.FixabilityManual {
+				t.Fatalf("trader status finding = %#v, want %s with the read command and manual fix", finding, wantSeverity)
+			}
+		})
+	}
 }
 
 func TestBuildDeepValidationVerifiedBlockersAndDerivedPublicChecks(t *testing.T) {
@@ -64,16 +199,18 @@ func TestBuildDeepValidationVerifiedBlockersAndDerivedPublicChecks(t *testing.T)
 			IsProgramLicenseAgreement: true,
 			Pending:                   true,
 		}}},
+		sellerInfo: activeNonTrader(),
 	}
 
 	deep, findings := buildDeepValidation(context.Background(), base, client, validation.DeepSessionCached)
-	if len(deep.Checks) != 5 {
-		t.Fatalf("deep checks = %d, want 5: %#v", len(deep.Checks), deep.Checks)
+	if len(deep.Checks) != 6 {
+		t.Fatalf("deep checks = %d, want 6: %#v", len(deep.Checks), deep.Checks)
 	}
 	for _, id := range []string{
 		validation.DeepCheckPrivacyPublishState,
 		validation.DeepCheckSubscriptionAttachment,
 		validation.DeepCheckAgreementsActive,
+		validation.DeepCheckDSATraderStatus,
 		validation.DeepCheckAvailabilityConfigured,
 		validation.DeepCheckReviewInformationComplete,
 	} {
@@ -117,13 +254,14 @@ func TestBuildDeepValidationDoesNotTreatMissingPrivateAttributesAsFalse(t *testi
 		validation.DeepCheckPrivacyPublishState,
 		validation.DeepCheckSubscriptionAttachment,
 		validation.DeepCheckAgreementsActive,
+		validation.DeepCheckDSATraderStatus,
 	} {
 		if got := deepCheckByID(t, deep, id); got.Status != validation.DeepStatusUnverified {
 			t.Fatalf("deep check %q = %#v, want unverified", id, got)
 		}
 	}
-	if len(findings) != 3 {
-		t.Fatalf("unverified findings = %d, want 3", len(findings))
+	if len(findings) != 4 {
+		t.Fatalf("unverified findings = %d, want 4", len(findings))
 	}
 	for _, finding := range findings {
 		if finding.Severity != validation.SeverityWarning {
@@ -449,6 +587,7 @@ func TestBuildDeepValidationRequiresSelectedVersionStateForAttachmentCheck(t *te
 	client := &stubDeepWebClient{
 		privacy:    &webcore.AppDataUsagesPublishState{ID: "publish-1", Published: true, PublishedKnown: true},
 		agreements: &asc.WebAgreementsStatusResult{Agreements: []asc.WebAgreement{{Status: "active", IsProgramLicenseAgreement: true}}},
+		sellerInfo: activeNonTrader(),
 	}
 
 	deep, findings := buildDeepValidation(context.Background(), validation.Report{AppID: "app-1"}, client, validation.DeepSessionCached)
@@ -544,6 +683,7 @@ func TestBuildDeepValidationWithoutSessionProducesUnverifiedWebChecks(t *testing
 		validation.DeepCheckPrivacyPublishState,
 		validation.DeepCheckSubscriptionAttachment,
 		validation.DeepCheckAgreementsActive,
+		validation.DeepCheckDSATraderStatus,
 	} {
 		if got := deepCheckByID(t, deep, id); got.Status != validation.DeepStatusUnverified {
 			t.Fatalf("deep check %q = %#v, want unverified", id, got)
