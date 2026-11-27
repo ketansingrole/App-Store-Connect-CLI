@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/asc"
+	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/shared/errfmt"
 )
 
 func TestFindOrCreatePublishAppStoreVersionUsesFreshCreateDeadline(t *testing.T) {
@@ -202,5 +203,36 @@ func TestFindOrCreatePublishAppStoreVersionPreservesNonTransientCreateError(t *t
 	}
 	if reads != 2 || creates != 1 {
 		t.Fatalf("expected one readback and no replay, reads=%d creates=%d", reads, creates)
+	}
+}
+
+func TestFindOrCreatePublishAppStoreVersionExplainsRefusedCreate(t *testing.T) {
+	creates := 0
+	swapTransport(t, publishCommandRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions" && req.URL.Query().Has("filter[versionString]"):
+			return publishCommandJSONResponse(http.StatusOK, `{"data":[]}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/appStoreVersions":
+			return publishCommandJSONResponse(http.StatusOK, `{"data":[{"type":"appStoreVersions","id":"version-2","attributes":{"platform":"IOS","versionString":"1.2.2","appVersionState":"REJECTED","appStoreState":"REJECTED"}}],"links":{"self":"/v1/apps/app-1/appStoreVersions"}}`)
+		case req.Method == http.MethodGet && req.URL.Path == "/v1/apps/app-1/reviewSubmissions":
+			return publishCommandJSONResponse(http.StatusOK, `{"data":[],"links":{"self":"/v1/apps/app-1/reviewSubmissions"}}`)
+		case req.Method == http.MethodPost && req.URL.Path == "/v1/appStoreVersions":
+			creates++
+			return publishCommandJSONResponse(http.StatusConflict, `{"errors":[{"status":"409","code":"ENTITY_ERROR.RELATIONSHIP.INVALID","detail":"You cannot create a new version of the App in the current state."}]}`)
+		default:
+			return nil, fmt.Errorf("unexpected request: %s %s", req.Method, req.URL.RequestURI())
+		}
+	}))
+	client := newPublishCommandTestClient(t)
+
+	_, err := findOrCreatePublishAppStoreVersion(context.Background(), newPublishTestDeps(), client, "app-1", "1.2.3", asc.PlatformIOS)
+	if !errors.Is(err, asc.ErrConflict) || !strings.Contains(err.Error(), "version 1.2.2 (REJECTED) of IOS is still in progress") {
+		t.Fatalf("expected the refusal to name 1.2.2, got %v", err)
+	}
+	if hint := errfmt.Classify(err).Hint; !strings.Contains(hint, `asc versions update --version-id "version-2" --version "1.2.3"`) {
+		t.Fatalf("expected the hint to name the number change, got %q", hint)
+	}
+	if creates != 1 {
+		t.Fatalf("expected one create and no replay, got %d", creates)
 	}
 }

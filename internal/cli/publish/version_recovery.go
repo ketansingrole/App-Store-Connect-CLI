@@ -7,6 +7,7 @@ import (
 
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/asc"
 	"github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/shared"
+	submitcli "github.com/rudrankriyam/App-Store-Connect-CLI/internal/cli/submit"
 )
 
 func findOrCreatePublishAppStoreVersion(ctx context.Context, d *shared.Deps, client *asc.Client, appID, version string, platform asc.Platform) (*asc.AppStoreVersionResponse, error) {
@@ -72,5 +73,8 @@ func findOrCreatePublishAppStoreVersion(ctx context.Context, d *shared.Deps, cli
 			return readVersion(readbackCtx)
 		},
 	)
-	return created, err
+	if err != nil {
+		return nil, submitcli.ExplainVersionCreateConflict(ctx, client, appID, platformValue, version, err)
+	}
+	return created, nil
 }

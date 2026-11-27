@@ -188,3 +188,26 @@ func reviewSubmissionPriority(state asc.ReviewSubmissionState) int {
 		return 1
 	}
 }
+
+// UnresolvedReviewSubmissionRemediation names the asc commands for a
+// submission App Review returned: read the rejection, then resolve the
+// REJECTED items and resubmit the same submission. It does not suggest
+// canceling: App Store Connect refuses to cancel an UNRESOLVED_ISSUES
+// submission, and the rejected version stays editable without it.
+func UnresolvedReviewSubmissionRemediation(appID, submissionID string) string {
+	submissionID = strings.TrimSpace(submissionID)
+	if submissionID == "" {
+		return "Resolve the outstanding App Review issues in App Store Connect, then resubmit if needed."
+	}
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		appID = "APP_ID"
+	}
+	return fmt.Sprintf(
+		"Read App Review's message with `asc web review show --app %q --submission %q`. Edit the version if the fix needs it, list the items with `asc review items list --submission %q`, mark each REJECTED item resolved with `asc review items update --id \"ITEM_ID\" --resolved true`, then resubmit with `asc review submissions-submit --id %q --confirm`.",
+		appID,
+		submissionID,
+		submissionID,
+		submissionID,
+	)
+}
